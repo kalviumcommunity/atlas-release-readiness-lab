@@ -1,6 +1,6 @@
 # Atlas Release Readiness Lab
 
-Small containerised Flask service used for a DevOps Foundation Module 3 release-readiness exercise.
+Small containerised Flask service with broken packaging, Kubernetes routing and workflow secret handling.
 
 ## ⚠️ This repository is intentionally broken
 
@@ -39,7 +39,7 @@ When the three issues are fixed, the following should be true:
 - `.github/workflows/release.yml` triggers on tags matching `v*.*.*` and on
   `workflow_dispatch`. It has a `release-check` job and a `production-deploy` job
   that `needs: release-check` and runs under a GitHub `environment: production`
-  gate (so a human approval is required before the deploy job can run).
+  gate (approval additionally requires separately configured environment reviewers).
 - Any reference to the registry token must use `${{ secrets.REGISTRY_TOKEN }}` only
   where required, and the value must never be printed or logged.
 - Release is tagged `v1.4.0`. If the release must be rolled back, the documented
@@ -58,30 +58,20 @@ k8s/secret.yaml               placeholder Secret (stringData, fake value only)
 release-readiness.md          template you must complete
 ```
 
-## Safe commands you will need
+## Prerequisites and checks
 
-Build and run:
+Git, Docker Engine, curl and internet access to download python:3.11-slim and Flask==3.0.3. Reserve host port 8080. No host Python installation or cloud account needed for Docker validation. kubectl is needed for Kubernetes validation; server-backed validation, kubectl diff and apply require a configured reachable cluster. Optional Kind/Minikube cluster must be isolated; do not apply to a real production context. Client dry-run is not proof of service routing and may still contact an API server for schema/discovery. If cluster validation is unavailable, state that limit rather than claiming deployment.
 
 ```bash
 docker build -t atlas-service:v1.4.0 .
-docker run -d --name atlas-release -p 8080:5000 atlas-service:v1.4.0
-curl http://localhost:8080/health
-```
-
-Validate Kubernetes manifests (no live cluster required):
-
-```bash
+docker run -d --name atlas-release -p 127.0.0.1:8080:5000 atlas-service:v1.4.0
+curl --max-time 5 -i http://localhost:8080/health
+# Only with a disposable configured cluster/context:
 kubectl apply --dry-run=client -f k8s/
 kubectl diff -f k8s/
 ```
 
-If Kind or Minikube is available:
-
-```bash
-kubectl apply -f k8s/
-kubectl get deployment,pods,service
-kubectl describe service atlas-service
-```
+Starter build fails intentionally. Compare Service selectors against Pod labels. Repair workflow secret handling without printing values or removing validation/production review. The deploy job is a placeholder: an environment name alone does not enforce approval; required reviewers must be configured separately in GitHub Settings. Do not add a real registry token or run the unsafe original token-printing step with real credentials. Keep the Kubernetes secret placeholder fake.
 
 Tag and inspect the release:
 
@@ -98,4 +88,6 @@ git log -1 --oneline
   `k8s/secret.yaml` must only ever contain a placeholder value.
 - Do not delete checks, remove the `production` environment gate, or bypass
   failing steps to "fix" an issue — find the actual root cause instead.
-- Complete `release-readiness.md` as part of your submission.
+- Complete `release-readiness.md` with observed local results, risks and explicitly unverified controls.
+
+Cleanup only your container: `docker rm -f atlas-release`.
